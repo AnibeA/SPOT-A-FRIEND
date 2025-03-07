@@ -79,10 +79,11 @@ def callback():
     if not spotify_id:
         return jsonify({"error": "Failed to retrieve Spotify user data"}), 400
 
-    # ✅ Fetch additional listening data
-    top_artists_response = requests.get(f"{SPOTIFY_API_BASE_URL}me/top/artists?limit=10", headers=headers)
-    top_tracks_response = requests.get(f"{SPOTIFY_API_BASE_URL}me/top/tracks?limit=10", headers=headers)
-    top_genres_response = requests.get(f"{SPOTIFY_API_BASE_URL}me/top/artists?limit=10", headers=headers)
+    # ✅ Fetch additional listening data (short-term = last 4 weeks)
+    top_artists_response = requests.get(f"{SPOTIFY_API_BASE_URL}me/top/artists?limit=10&time_range=short_term", headers=headers)
+    top_tracks_response = requests.get(f"{SPOTIFY_API_BASE_URL}me/top/tracks?limit=10&time_range=short_term", headers=headers)
+    top_genres_response = requests.get(f"{SPOTIFY_API_BASE_URL}me/top/artists?limit=10&time_range=short_term", headers=headers)
+
 
     # ✅ Extract relevant data
     top_artists = [artist["name"] for artist in top_artists_response.json().get("items", [])]
@@ -207,13 +208,9 @@ def refresh_access_token(user):
     return user.access_token
 
 
+
 @auth.route("/logout")
 def logout():
-    """Logs out the current user by completely clearing the session."""
-    session.pop("spotify_id", None)
-    session.pop("access_token", None)
-    session.pop("refresh_token", None)
+    """Logs out the current user by clearing session data."""
     session.clear()
-    session.modified = True  
-
     return jsonify({"message": "User logged out successfully!"}), 200
