@@ -3,6 +3,7 @@ from backend.config import Config  # Configuration settings (database, secret ke
 from backend.extensions import db, migrate, bcrypt, cors  # Extensions for database, migrations, security, and CORS
 from backend.auth_routes import auth  # Import authentication-related routes
 from backend.routes import main  # ✅ Import general routes (home page, etc.)
+from backend.user_comparison import comparison  # ✅ Import user comparison routes
 
 def create_app():
     """
@@ -25,5 +26,6 @@ def create_app():
     # ✅ Register Blueprints (modular route handlers)
     app.register_blueprint(auth)  # Authentication routes (e.g., /login, /callback, /logout)
     app.register_blueprint(main)  # General routes (e.g., home page /)
+    app.register_blueprint(comparison)  # ✅ Register the user comparison routes
 
     return app  # ✅ Return the Flask app instance

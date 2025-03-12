@@ -4,6 +4,8 @@ from urllib.parse import urlencode
 from flask import Blueprint, redirect, request, session, jsonify
 from backend.config import Config
 from backend.models import db, User
+import json  # ✅ Required for converting lists to JSON format
+
 
 # ✅ Create a Blueprint for authentication-related routes
 auth = Blueprint("auth", __name__)
@@ -131,31 +133,7 @@ def recently_played():
 
 @auth.route("/top-artists", methods=["GET"])
 def top_artists():
-    return fetch_spotify_data("me/top/artists")
-
-
-@auth.route("/top-tracks", methods=["GET"])
-def top_tracks():
-    return fetch_spotify_data("me/top/tracks")
-
-
-@auth.route("/top-genres", methods=["GET"])
-def top_genres():
-    response = fetch_spotify_data("me/top/artists")
-    if isinstance(response, tuple):  # ✅ Handles error responses properly
-        return response
-
-    artist_data = response.get_json()
-    genre_list = []
-    for artist in artist_data.get("items", []):
-        genre_list.extend(artist.get("genres", []))
-
-    unique_genres = list(set(genre_list))  # Remove duplicates
-    return jsonify({"top_genres": unique_genres})
-
-
-# ✅ FUNCTION TO FETCH SPOTIFY DATA
-def fetch_spotify_data(endpoint):
+    """Fetch the user's top artists (latest data)."""
     spotify_id = request.args.get("spotify_id")
 
     if not spotify_id:
@@ -165,15 +143,81 @@ def fetch_spotify_data(endpoint):
     if not user:
         return jsonify({"error": "User not found"}), 404
 
+    return fetch_spotify_data("me/top/artists", user)  # ✅ Pass `user`
+
+
+@auth.route("/top-tracks", methods=["GET"])
+def top_tracks():
+    """Fetch the user's top tracks (latest data)."""
+    spotify_id = request.args.get("spotify_id")
+
+    if not spotify_id:
+        return jsonify({"error": "Missing spotify_id"}), 400
+
+    user = User.query.filter_by(spotify_id=spotify_id).first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    return fetch_spotify_data("me/top/tracks", user)  # ✅ Pass `user`
+
+@auth.route("/top-genres", methods=["GET"])
+def top_genres():
+    """Fetch the user's most listened genres based on top artists (latest data)."""
+    spotify_id = request.args.get("spotify_id")
+
+    if not spotify_id:
+        return jsonify({"error": "Missing spotify_id"}), 400
+
+    user = User.query.filter_by(spotify_id=spotify_id).first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    # ✅ Pass `user` as an argument to `fetch_spotify_data()`
+    response = fetch_spotify_data("me/top/artists", user)
+
+    if isinstance(response, tuple):  # Handles error responses properly
+        return response
+
+    artist_data = response.get_json()
+
+    genre_list = []
+    for artist in artist_data.get("items", []):
+        genre_list.extend(artist.get("genres", []))
+
+    unique_genres = list(set(genre_list))
+
+    return jsonify({"top_genres": unique_genres})
+
+
+# ✅ FUNCTION TO FETCH SPOTIFY DATA
+def fetch_spotify_data(endpoint, user):
+    """Fetch latest Spotify data, update database, and return results."""
     access_token = refresh_access_token(user)
-
     headers = {"Authorization": f"Bearer {access_token}"}
+    
     response = requests.get(f"{SPOTIFY_API_BASE_URL}{endpoint}?limit=10", headers=headers)
-
+    
     if response.status_code != 200:
         return jsonify({"error": f"Failed to fetch {endpoint}"}), response.status_code
 
-    return jsonify(response.json())
+    data = response.json()
+
+    # Update user data in database
+    if "top/artists" in endpoint:
+        user.top_artists = json.dumps([artist["name"] for artist in data.get("items", [])])
+    elif "top/tracks" in endpoint:
+        user.top_tracks = json.dumps([track["name"] for track in data.get("items", [])])
+    elif "top/genres" in endpoint:
+        genre_list = []
+        for artist in data.get("items", []):
+            genre_list.extend(artist.get("genres", []))
+        user.top_genres = json.dumps(list(set(genre_list)))
+
+    db.session.commit()
+
+    return jsonify(data)
+
+
 
 
 # ✅ FUNCTION TO REFRESH ACCESS TOKEN
