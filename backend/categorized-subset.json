@@ -2,7 +2,6 @@
   "African": [
     "African heavy metal",
     "African hip hop",
-    "Afrobeat",
     "Apala",
     "Benga",
     "Bongo Flava",
@@ -480,8 +479,9 @@
     "Old school hip hop",
     "Political hip hop",
     "Ragga",
+    "Rage rap",
     "Reggaeton",
-    "Rap music",
+    "Rap",
     "Country-rap",
     "Cumbia rap",
     "Freestyle rap",
@@ -846,5 +846,11 @@
     "Visual kei",
     "Nagoya kei",
     "Worldbeat"
+  ],
+  "Afrobeats": [
+    "afrobeat",
+    "afropiano",
+    "afropop",
+    "alté"
   ]
 }

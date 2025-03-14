@@ -202,20 +202,23 @@ def fetch_spotify_data(endpoint, user):
 
     data = response.json()
 
-    # Update user data in database
-    if "top/artists" in endpoint:
-        user.top_artists = json.dumps([artist["name"] for artist in data.get("items", [])])
-    elif "top/tracks" in endpoint:
-        user.top_tracks = json.dumps([track["name"] for track in data.get("items", [])])
-    elif "top/genres" in endpoint:
+    # ✅ Ensure JSON formatting when saving genres
+    if "top/artists" in endpoint:  # Fetch genres from artists
         genre_list = []
         for artist in data.get("items", []):
             genre_list.extend(artist.get("genres", []))
-        user.top_genres = json.dumps(list(set(genre_list)))
+        user.top_genres = json.dumps(list(set(genre_list)))  # ✅ Store as a JSON array, not a string
+
+    elif "top/tracks" in endpoint:
+        user.top_tracks = json.dumps([track["name"] for track in data.get("items", [])])
+
+    elif "top/artists" in endpoint:
+        user.top_artists = json.dumps([artist["name"] for artist in data.get("items", [])])
 
     db.session.commit()
 
     return jsonify(data)
+
 
 
 
