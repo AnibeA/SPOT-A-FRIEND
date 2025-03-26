@@ -4,13 +4,13 @@ from urllib.parse import urlencode
 from flask import Blueprint, redirect, request, session, jsonify
 from backend.config import Config
 from backend.models import db, User
-import json  # ✅ Required for converting lists to JSON format
+import json  #Required for converting lists to JSON format
 
 
-# ✅ Create a Blueprint for authentication-related routes
+#  Create a Blueprint for authentication-related routes
 auth = Blueprint("auth", __name__)
 
-# ✅ Spotify API URLs and required scopes for authentication
+#  Spotify API URLs and required scopes for authentication
 SPOTIFY_AUTH_URL = "https://accounts.spotify.com/authorize"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
 SPOTIFY_API_BASE_URL = "https://api.spotify.com/v1/"
@@ -18,7 +18,7 @@ SCOPE = "user-read-recently-played user-top-read user-library-read user-read-pri
 FRONTEND_REDIRECT_URI = "http://127.0.0.1:3000/dashboard"
 
 # ----------------------------------------------
-# ✅ ROUTE: /login - Redirects user to Spotify for authentication
+#  ROUTE: /login - Redirects user to Spotify for authentication
 # ----------------------------------------------
 @auth.route("/login")
 def login():
@@ -35,7 +35,7 @@ def login():
 
 
 # ----------------------------------------------
-# ✅ ROUTE: /callback - Handles Spotify OAuth callback & saves user data
+#  ROUTE: /callback - Handles Spotify OAuth callback & saves user data
 # ----------------------------------------------
 @auth.route("/callback")
 def callback():
@@ -69,7 +69,7 @@ def callback():
 
     headers = {"Authorization": f"Bearer {access_token}"}
 
-    # ✅ Fetch user's Spotify profile
+    #  Fetch user's Spotify profile
     user_response = requests.get(f"{SPOTIFY_API_BASE_URL}me", headers=headers)
     
     try:
@@ -81,13 +81,13 @@ def callback():
     if not spotify_id:
         return jsonify({"error": "Failed to retrieve Spotify user data"}), 400
 
-    # ✅ Fetch additional listening data (short-term = last 4 weeks)
+    #  Fetch additional listening data (short-term = last 4 weeks)
     top_artists_response = requests.get(f"{SPOTIFY_API_BASE_URL}me/top/artists?limit=10&time_range=short_term", headers=headers)
     top_tracks_response = requests.get(f"{SPOTIFY_API_BASE_URL}me/top/tracks?limit=10&time_range=short_term", headers=headers)
     top_genres_response = requests.get(f"{SPOTIFY_API_BASE_URL}me/top/artists?limit=10&time_range=short_term", headers=headers)
 
 
-    # ✅ Extract relevant data
+    #  Extract relevant data
     top_artists = [artist["name"] for artist in top_artists_response.json().get("items", [])]
     top_tracks = [track["name"] for track in top_tracks_response.json().get("items", [])]
     
@@ -96,7 +96,7 @@ def callback():
         genre_list.extend(artist.get("genres", []))
     top_genres = list(set(genre_list))  # Remove duplicates
 
-    # ✅ Check if user exists
+    #  Check if user exists
     user = User.query.filter_by(spotify_id=spotify_id).first()
 
     if not user:
@@ -125,7 +125,7 @@ def callback():
     return redirect(f"{FRONTEND_REDIRECT_URI}?spotify_id={spotify_id}")
 
 
-# ✅ ROUTES TO FETCH DATA
+#  ROUTES TO FETCH DATA
 @auth.route("/recently-played", methods=["GET"])
 def recently_played():
     return fetch_spotify_data("me/player/recently-played")
@@ -143,7 +143,7 @@ def top_artists():
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    return fetch_spotify_data("me/top/artists", user)  # ✅ Pass `user`
+    return fetch_spotify_data("me/top/artists", user)  #  Pass `user`
 
 
 @auth.route("/top-tracks", methods=["GET"])
@@ -158,7 +158,7 @@ def top_tracks():
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    return fetch_spotify_data("me/top/tracks", user)  # ✅ Pass `user`
+    return fetch_spotify_data("me/top/tracks", user)  #  Pass `user`
 
 @auth.route("/top-genres", methods=["GET"])
 def top_genres():
@@ -172,7 +172,7 @@ def top_genres():
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    # ✅ Pass `user` as an argument to `fetch_spotify_data()`
+    # Pass `user` as an argument to `fetch_spotify_data()`
     response = fetch_spotify_data("me/top/artists", user)
 
     if isinstance(response, tuple):  # Handles error responses properly
@@ -189,7 +189,7 @@ def top_genres():
     return jsonify({"top_genres": unique_genres})
 
 
-# ✅ FUNCTION TO FETCH SPOTIFY DATA
+#  FUNCTION TO FETCH SPOTIFY DATA
 def fetch_spotify_data(endpoint, user):
     """Fetch latest Spotify data, update database, and return results."""
     access_token = refresh_access_token(user)
@@ -202,7 +202,7 @@ def fetch_spotify_data(endpoint, user):
 
     data = response.json()
 
-    # ✅ Ensure JSON formatting when saving genres
+    # Ensure JSON formatting when saving genres
     if "top/artists" in endpoint:  # Fetch genres from artists
         genre_list = []
         for artist in data.get("items", []):
