@@ -25,7 +25,7 @@ export default function DashboardPage() {
 
         setUserData({
           topGenres: genresData.top_genres || [],
-          topArtists: artistsData.top_artists || []
+          topArtists: artistsData.items || [] // ✅ FIX: Pull actual artist list from "items"
         });
       } catch (err) {
         console.error("Error fetching user data:", err);
@@ -36,12 +36,12 @@ export default function DashboardPage() {
   }, [spotifyId]);
 
   return (
-    <div className="p-8">
+    <div className="p-8 bg-black text-white min-h-screen">
       <h1 className="text-3xl font-bold mb-6">Welcome to your Dashboard</h1>
 
-      <div className="mb-8">
-        <h2 className="text-2xl font-semibold">🎵 Top Genres</h2>
-        <ul className="list-disc list-inside mt-2">
+      <div className="mb-10">
+        <h2 className="text-2xl font-semibold mb-2">🎵 Top Genres</h2>
+        <ul className="list-disc list-inside space-y-1">
           {userData.topGenres.map((genre, index) => (
             <li key={index}>{genre}</li>
           ))}
@@ -49,12 +49,27 @@ export default function DashboardPage() {
       </div>
 
       <div>
-        <h2 className="text-2xl font-semibold">👨‍🎤 Top Artists</h2>
-        <ul className="list-disc list-inside mt-2">
-          {userData.topArtists.map((artist, index) => (
-            <li key={index}>{artist}</li>
+        <h2 className="text-2xl font-semibold mb-4">👨‍🎤 Top Artists</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {userData.topArtists.map((artist) => (
+            <div key={artist.id} className="bg-white text-black rounded-lg p-4 shadow-lg text-center">
+              <img
+                src={artist.images?.[0]?.url || '/fallback-image.png'}
+                alt={artist.name}
+                className="w-full h-40 object-cover rounded"
+              />
+              <h3 className="mt-3 text-lg font-semibold">{artist.name}</h3>
+              <a
+                href={artist.external_urls.spotify}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-500 text-sm block mt-1"
+              >
+                View on Spotify
+              </a>
+            </div>
           ))}
-        </ul>
+        </div>
       </div>
     </div>
   );

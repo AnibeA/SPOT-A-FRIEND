@@ -44,7 +44,6 @@ def callback():
     if not code:
         return jsonify({"error": "Authorization failed"}), 400
 
-    # Exchange authorization code for access token
     token_data = {
         "grant_type": "authorization_code",
         "code": code,
@@ -54,7 +53,6 @@ def callback():
     }
 
     response = requests.post(SPOTIFY_TOKEN_URL, data=token_data)
-    
     try:
         token_info = response.json()
     except requests.exceptions.JSONDecodeError:
@@ -69,52 +67,50 @@ def callback():
 
     headers = {"Authorization": f"Bearer {access_token}"}
 
-    #  Fetch user's Spotify profile
+    # Get user profile
     user_response = requests.get(f"{SPOTIFY_API_BASE_URL}me", headers=headers)
-    
     try:
         user_data = user_response.json()
     except requests.exceptions.JSONDecodeError:
-        return jsonify({"error": "Failed to retrieve Spotify user data. Check your Spotify Developer settings."}), 400
+        return jsonify({"error": "Failed to retrieve Spotify user data."}), 400
 
     spotify_id = user_data.get("id")
     if not spotify_id:
-        return jsonify({"error": "Failed to retrieve Spotify user data"}), 400
+        return jsonify({"error": "Failed to retrieve Spotify user ID"}), 400
 
-    #  Fetch additional listening data (short-term = last 4 weeks)
-    top_artists_response = requests.get(f"{SPOTIFY_API_BASE_URL}me/top/artists?limit=10&time_range=short_term", headers=headers)
-    top_tracks_response = requests.get(f"{SPOTIFY_API_BASE_URL}me/top/tracks?limit=10&time_range=short_term", headers=headers)
-    top_genres_response = requests.get(f"{SPOTIFY_API_BASE_URL}me/top/artists?limit=10&time_range=short_term", headers=headers)
+    # 🔄 Always fetch latest top artists, tracks, genres from API
+    top_artists_res = requests.get(f"{SPOTIFY_API_BASE_URL}me/top/artists?limit=10&time_range=short_term", headers=headers)
+    top_tracks_res = requests.get(f"{SPOTIFY_API_BASE_URL}me/top/tracks?limit=10&time_range=short_term", headers=headers)
 
+    top_artists = [artist["name"] for artist in top_artists_res.json().get("items", [])]
+    top_tracks = [track["name"] for track in top_tracks_res.json().get("items", [])]
 
-    #  Extract relevant data
-    top_artists = [artist["name"] for artist in top_artists_response.json().get("items", [])]
-    top_tracks = [track["name"] for track in top_tracks_response.json().get("items", [])]
-    
+    # Extract genres from top artists
     genre_list = []
-    for artist in top_genres_response.json().get("items", []):
+    for artist in top_artists_res.json().get("items", []):
         genre_list.extend(artist.get("genres", []))
-    top_genres = list(set(genre_list))  # Remove duplicates
+    top_genres = list(set(genre_list))
 
-    #  Check if user exists
+    # 📦 Save or update user data in DB
     user = User.query.filter_by(spotify_id=spotify_id).first()
-
     if not user:
         user = User(
             spotify_id=spotify_id,
             access_token=access_token,
             refresh_token=refresh_token,
             expires_at=datetime.utcnow() + timedelta(seconds=expires_in),
-            top_artists=str(top_artists),
-            top_tracks=str(top_tracks),
-            top_genres=str(top_genres)
+            top_artists=json.dumps(top_artists),
+            top_tracks=json.dumps(top_tracks),
+            top_genres=json.dumps(top_genres)
         )
         db.session.add(user)
     else:
         user.access_token = access_token
         user.refresh_token = refresh_token
         user.expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
-        user.update_listening_data(str(top_artists), str(top_tracks), str(top_genres))
+        user.top_artists = json.dumps(top_artists)
+        user.top_tracks = json.dumps(top_tracks)
+        user.top_genres = json.dumps(top_genres)
 
     db.session.commit()
 
@@ -194,9 +190,9 @@ def fetch_spotify_data(endpoint, user):
     """Fetch latest Spotify data, update database, and return results."""
     access_token = refresh_access_token(user)
     headers = {"Authorization": f"Bearer {access_token}"}
-    
+
     response = requests.get(f"{SPOTIFY_API_BASE_URL}{endpoint}?limit=10", headers=headers)
-    
+
     if response.status_code != 200:
         return jsonify({"error": f"Failed to fetch {endpoint}"}), response.status_code
 
@@ -226,7 +222,7 @@ def fetch_spotify_data(endpoint, user):
 # ✅ FUNCTION TO REFRESH ACCESS TOKEN
 def refresh_access_token(user):
     if not user.is_token_expired():
-        return user.access_token  
+        return user.access_token
 
     if not user.refresh_token:
         return jsonify({"error": "No refresh token available"}), 400
@@ -239,7 +235,7 @@ def refresh_access_token(user):
     }
 
     response = requests.post(SPOTIFY_TOKEN_URL, data=payload)
-    
+
     try:
         token_info = response.json()
     except requests.exceptions.JSONDecodeError:
