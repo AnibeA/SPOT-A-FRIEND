@@ -2,6 +2,7 @@
 
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import LogoutButton from '@/components/LogoutButton';
 
 export default function DashboardPage() {
   const searchParams = useSearchParams();

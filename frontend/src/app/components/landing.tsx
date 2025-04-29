@@ -11,7 +11,7 @@ export default function LandingPage() {
 
       {/* ✅ Replace with actual Flask login URL */}
       <a
-        href="http://localhost:5000/login" // check later on to see why it doesnt work with 127:500
+        href="http://localhost:5000/login"
         className="bg-white text-purple-700 px-6 py-3 rounded-lg shadow-lg font-semibold hover:bg-purple-100 transition"
       >
         Get Started
