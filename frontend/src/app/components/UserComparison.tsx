@@ -16,9 +16,9 @@ async function fetchUserComparison(user1: string, user2: string) {
     }
 }
 
-// ✅ Main functional component for comparing Spotify users
+//  Main functional component for comparing Spotify users
 export default function UserComparison() {
-    // 🔹 State variables to track input and data
+    //  State variables to track input and data
     const [user1, setUser1] = useState(""); // Spotify ID for user 1
     const [user2, setUser2] = useState(""); // Spotify ID for user 2
     const [data, setData] = useState<any>(null); // API response data

@@ -4,42 +4,31 @@ from urllib.parse import urlencode
 from flask import Blueprint, redirect, request, session, jsonify
 from backend.config import Config
 from backend.models import db, User
-import json  #Required for converting lists to JSON format
+import json
+from flask import make_response
 
 
-#  Create a Blueprint for authentication-related routes
 auth = Blueprint("auth", __name__)
 
-#  Spotify API URLs and required scopes for authentication
 SPOTIFY_AUTH_URL = "https://accounts.spotify.com/authorize"
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
 SPOTIFY_API_BASE_URL = "https://api.spotify.com/v1/"
 SCOPE = "user-read-recently-played user-top-read user-library-read user-read-private"
 FRONTEND_REDIRECT_URI = "http://127.0.0.1:3000/dashboard"
 
-# ----------------------------------------------
-#  ROUTE: /login - Redirects user to Spotify for authentication
-# ----------------------------------------------
 @auth.route("/login")
 def login():
-    """Redirect user to Spotify authorization page (forces login)."""
     params = {
         "client_id": Config.SPOTIFY_CLIENT_ID,
         "response_type": "code",
         "redirect_uri": Config.SPOTIFY_REDIRECT_URI,
         "scope": SCOPE,
-        "show_dialog": "true",  # ✅ Forces Spotify to ask for login every time
+        "show_dialog": "true",
     }
-    auth_url = f"{SPOTIFY_AUTH_URL}?{urlencode(params)}"
-    return redirect(auth_url)
+    return redirect(f"{SPOTIFY_AUTH_URL}?{urlencode(params)}")
 
-
-# ----------------------------------------------
-#  ROUTE: /callback - Handles Spotify OAuth callback & saves user data
-# ----------------------------------------------
 @auth.route("/callback")
 def callback():
-    """Handle the Spotify OAuth callback and save user data."""
     code = request.args.get("code")
     if not code:
         return jsonify({"error": "Authorization failed"}), 400
@@ -69,29 +58,32 @@ def callback():
 
     # Get user profile
     user_response = requests.get(f"{SPOTIFY_API_BASE_URL}me", headers=headers)
-    try:
-        user_data = user_response.json()
-    except requests.exceptions.JSONDecodeError:
-        return jsonify({"error": "Failed to retrieve Spotify user data."}), 400
-
+    user_data = user_response.json()
     spotify_id = user_data.get("id")
     if not spotify_id:
-        return jsonify({"error": "Failed to retrieve Spotify user ID"}), 400
+        return jsonify({"error": "Spotify ID not found"}), 400
 
-    # 🔄 Always fetch latest top artists, tracks, genres from API
+    # Fetch top artists and tracks
     top_artists_res = requests.get(f"{SPOTIFY_API_BASE_URL}me/top/artists?limit=10&time_range=short_term", headers=headers)
     top_tracks_res = requests.get(f"{SPOTIFY_API_BASE_URL}me/top/tracks?limit=10&time_range=short_term", headers=headers)
 
-    top_artists = [artist["name"] for artist in top_artists_res.json().get("items", [])]
+    # Process top artists
+    artist_items = top_artists_res.json().get("items", [])
+    top_artists = []
+    top_genres = set()
+
+    for artist in artist_items:
+        top_artists.append({
+            "name": artist["name"],
+            "genres": artist.get("genres", []),
+            "images": artist.get("images", []),
+            "external_urls": artist.get("external_urls", {})
+        })
+        top_genres.update(artist.get("genres", []))
+
     top_tracks = [track["name"] for track in top_tracks_res.json().get("items", [])]
 
-    # Extract genres from top artists
-    genre_list = []
-    for artist in top_artists_res.json().get("items", []):
-        genre_list.extend(artist.get("genres", []))
-    top_genres = list(set(genre_list))
-
-    # 📦 Save or update user data in DB
+    # Store or update user in DB
     user = User.query.filter_by(spotify_id=spotify_id).first()
     if not user:
         user = User(
@@ -101,7 +93,7 @@ def callback():
             expires_at=datetime.utcnow() + timedelta(seconds=expires_in),
             top_artists=json.dumps(top_artists),
             top_tracks=json.dumps(top_tracks),
-            top_genres=json.dumps(top_genres)
+            top_genres=json.dumps(list(top_genres))
         )
         db.session.add(user)
     else:
@@ -110,7 +102,7 @@ def callback():
         user.expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
         user.top_artists = json.dumps(top_artists)
         user.top_tracks = json.dumps(top_tracks)
-        user.top_genres = json.dumps(top_genres)
+        user.top_genres = json.dumps(list(top_genres))
 
     db.session.commit()
 
@@ -120,77 +112,53 @@ def callback():
 
     return redirect(f"{FRONTEND_REDIRECT_URI}?spotify_id={spotify_id}")
 
-
-#  ROUTES TO FETCH DATA
 @auth.route("/recently-played", methods=["GET"])
 def recently_played():
     return fetch_spotify_data("me/player/recently-played")
 
-
 @auth.route("/top-artists", methods=["GET"])
 def top_artists():
-    """Fetch the user's top artists (latest data)."""
     spotify_id = request.args.get("spotify_id")
-
     if not spotify_id:
         return jsonify({"error": "Missing spotify_id"}), 400
-
     user = User.query.filter_by(spotify_id=spotify_id).first()
     if not user:
         return jsonify({"error": "User not found"}), 404
-
-    return fetch_spotify_data("me/top/artists", user)  #  Pass `user`
-
+    return fetch_spotify_data("me/top/artists", user)
 
 @auth.route("/top-tracks", methods=["GET"])
 def top_tracks():
-    """Fetch the user's top tracks (latest data)."""
     spotify_id = request.args.get("spotify_id")
-
     if not spotify_id:
         return jsonify({"error": "Missing spotify_id"}), 400
-
     user = User.query.filter_by(spotify_id=spotify_id).first()
     if not user:
         return jsonify({"error": "User not found"}), 404
-
-    return fetch_spotify_data("me/top/tracks", user)  #  Pass `user`
+    return fetch_spotify_data("me/top/tracks", user)
 
 @auth.route("/top-genres", methods=["GET"])
 def top_genres():
-    """Fetch the user's most listened genres based on top artists (latest data)."""
     spotify_id = request.args.get("spotify_id")
-
     if not spotify_id:
         return jsonify({"error": "Missing spotify_id"}), 400
-
     user = User.query.filter_by(spotify_id=spotify_id).first()
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    # Pass `user` as an argument to `fetch_spotify_data()`
     response = fetch_spotify_data("me/top/artists", user)
-
-    if isinstance(response, tuple):  # Handles error responses properly
+    if isinstance(response, tuple):
         return response
 
     artist_data = response.get_json()
-
     genre_list = []
     for artist in artist_data.get("items", []):
         genre_list.extend(artist.get("genres", []))
 
-    unique_genres = list(set(genre_list))
+    return jsonify({"top_genres": list(set(genre_list))})
 
-    return jsonify({"top_genres": unique_genres})
-
-
-#  FUNCTION TO FETCH SPOTIFY DATA
 def fetch_spotify_data(endpoint, user):
-    """Fetch latest Spotify data, update database, and return results."""
     access_token = refresh_access_token(user)
     headers = {"Authorization": f"Bearer {access_token}"}
-
     response = requests.get(f"{SPOTIFY_API_BASE_URL}{endpoint}?limit=10", headers=headers)
 
     if response.status_code != 200:
@@ -198,32 +166,29 @@ def fetch_spotify_data(endpoint, user):
 
     data = response.json()
 
-    # Ensure JSON formatting when saving genres
-    if "top/artists" in endpoint:  # Fetch genres from artists
-        genre_list = []
+    if "top/artists" in endpoint:
+        top_artists = []
+        genres = set()
         for artist in data.get("items", []):
-            genre_list.extend(artist.get("genres", []))
-        user.top_genres = json.dumps(list(set(genre_list)))  # ✅ Store as a JSON array, not a string
+            top_artists.append({
+                "name": artist["name"],
+                "genres": artist.get("genres", []),
+                "images": artist.get("images", []),
+                "external_urls": artist.get("external_urls", {})
+            })
+            genres.update(artist.get("genres", []))
+        user.top_artists = json.dumps(top_artists)
+        user.top_genres = json.dumps(list(genres))
 
     elif "top/tracks" in endpoint:
         user.top_tracks = json.dumps([track["name"] for track in data.get("items", [])])
 
-    elif "top/artists" in endpoint:
-        user.top_artists = json.dumps([artist["name"] for artist in data.get("items", [])])
-
     db.session.commit()
-
     return jsonify(data)
 
-
-
-
-
-# ✅ FUNCTION TO REFRESH ACCESS TOKEN
 def refresh_access_token(user):
     if not user.is_token_expired():
         return user.access_token
-
     if not user.refresh_token:
         return jsonify({"error": "No refresh token available"}), 400
 
@@ -235,12 +200,7 @@ def refresh_access_token(user):
     }
 
     response = requests.post(SPOTIFY_TOKEN_URL, data=payload)
-
-    try:
-        token_info = response.json()
-    except requests.exceptions.JSONDecodeError:
-        return jsonify({"error": "Failed to refresh access token"}), 400
-
+    token_info = response.json()
     if "access_token" not in token_info:
         return jsonify({"error": "Failed to refresh access token"}), 400
 
@@ -250,10 +210,9 @@ def refresh_access_token(user):
 
     return user.access_token
 
-
-
 @auth.route("/logout")
 def logout():
-    """Logs out the current user by clearing session data."""
     session.clear()
-    return jsonify({"message": "User logged out successfully!"}), 200
+    response = make_response(jsonify({"message": "User logged out successfully!"}))
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
