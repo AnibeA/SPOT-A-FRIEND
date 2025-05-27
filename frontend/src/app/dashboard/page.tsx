@@ -4,7 +4,6 @@ import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import LogoutButton from '../components/LogoutButton';
 
-
 export default function DashboardPage() {
   const searchParams = useSearchParams();
   const spotifyId = searchParams.get('spotify_id');
@@ -13,6 +12,21 @@ export default function DashboardPage() {
     topGenres: [],
     topArtists: []
   });
+
+  const [showInviteOptions, setShowInviteOptions] = useState(false);
+  const inviteLink = `http://localhost:3000/invite?inviter_id=${spotifyId}`;
+
+
+  const toggleInvitePopup = () => setShowInviteOptions(prev => !prev);
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      alert("Invite link copied to clipboard!");
+    } catch (err) {
+      console.error("Failed to copy invite link", err);
+    }
+  };
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -27,7 +41,7 @@ export default function DashboardPage() {
 
         setUserData({
           topGenres: genresData.top_genres || [],
-          topArtists: artistsData.items || [] // ✅ FIX: Pull actual artist list from "items"
+          topArtists: artistsData.items || []
         });
       } catch (err) {
         console.error("Error fetching user data:", err);
@@ -38,43 +52,86 @@ export default function DashboardPage() {
   }, [spotifyId]);
 
   return (
-    <div className="p-8 bg-black text-white min-h-screen">
-         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold mb-6">Welcome to your Dashboard</h1>
-          <LogoutButton />
-         </div>
-          <div className="mb-10">
-            <h2 className="text-2xl font-semibold mb-2">🎵 Top Genres</h2>
-            <ul className="list-disc list-inside space-y-1">
-              {userData.topGenres.map((genre, index) => (
-                <li key={index}>{genre}</li>
-              ))}
-            </ul>
-          </div>
+    <div className="p-8">
+      <h1 className="text-3xl font-bold mb-6">Welcome to your Dashboard</h1>
 
-          <div>
-            <h2 className="text-2xl font-semibold mb-4">👨‍🎤 Top Artists</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {userData.topArtists.map((artist) => (
-                <div key={artist.id} className="bg-white text-black rounded-lg p-4 shadow-lg text-center">
-                  <img
-                    src={artist.images?.[0]?.url || '/fallback-image.png'}
-                    alt={artist.name}
-                    className="w-full h-40 object-cover rounded"
-                  />
-                  <h3 className="mt-3 text-lg font-semibold">{artist.name}</h3>
-                  <a
-                    href={artist.external_urls.spotify}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-500 text-sm block mt-1"
-                  >
-                    View on Spotify
-                  </a>
-                </div>
-              ))}
-            </div>
+      <div className="flex gap-4 mb-6">
+        <LogoutButton />
+        <button
+          onClick={toggleInvitePopup}
+          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+        >
+          Invite a Friend
+        </button>
+      </div>
+
+      {/* 📤 Invite popup options */}
+      {showInviteOptions && (
+        <div className="bg-gray-800 text-white p-4 rounded shadow-md mb-8 max-w-md">
+          <p className="mb-2">Share this invite link:</p>
+          <p className="text-sm break-words bg-black p-2 rounded mb-3">{inviteLink}</p>
+
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={copyLink}
+              className="bg-gray-600 hover:bg-gray-700 px-3 py-1 rounded"
+            >
+              📋 Copy to Clipboard
+            </button>
+
+            <a
+              href={`mailto:?subject=Join me on Spot-A-Friend&body=Use this link to join: ${inviteLink}`}
+              className="text-blue-400 underline"
+            >
+              📧 Send via Email
+            </a>
+
+            <a
+              href={`sms:?&body=Hey! Check out this app: ${inviteLink}`}
+              className="text-blue-400 underline"
+            >
+              📱 Send via SMS
+            </a>
           </div>
+        </div>
+      )}
+
+      <div className="mb-8">
+        <h2 className="text-2xl font-semibold">🎵 Top Genres</h2>
+        <ul className="list-disc list-inside mt-2">
+          {userData.topGenres.map((genre, index) => (
+            <li key={index}>{genre}</li>
+          ))}
+        </ul>
+      </div>
+
+      <div>
+        <h2 className="text-2xl font-semibold">👨‍🎤 Top Artists</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mt-4">
+          {userData.topArtists.map((artist, index) => (
+            <div key={index} className="bg-white text-black p-4 rounded shadow-md text-center">
+              {artist.images && artist.images[0] && (
+                <img
+                  src={artist.images[0].url}
+                  alt={artist.name}
+                  className="w-full h-40 object-cover rounded mb-2"
+                />
+              )}
+              <h3 className="text-lg font-semibold">{artist.name}</h3>
+              {artist.external_urls?.spotify && (
+                <a
+                  href={artist.external_urls.spotify}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 text-sm underline"
+                >
+                  View on Spotify
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

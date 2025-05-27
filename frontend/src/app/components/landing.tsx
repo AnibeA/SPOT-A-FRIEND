@@ -12,7 +12,7 @@ export default function LandingPage() {
       {/* ✅ Replace with actual Flask login URL */}
       <a
         href="http://localhost:5000/login"
-        className="bg-white text-green-700 px-6 py-3 rounded-lg shadow-lg font-semibold hover:bg-green-200 transition"
+        className="bg-black text-green-700 px-6 py-3 rounded-lg shadow-lg font-semibold hover:bg-green-200 transition"
       >
         Get Started
       </a>

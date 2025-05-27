@@ -18,6 +18,12 @@ FRONTEND_REDIRECT_URI = "http://127.0.0.1:3000/dashboard"
 
 @auth.route("/login")
 def login():
+    """Redirect user to Spotify authorization page (with optional inviter_id)."""
+    inviter_id = request.args.get("inviter_id")
+
+    if inviter_id:
+        session["inviter_id"] = inviter_id  # Temporarily store inviter's ID in session
+
     params = {
         "client_id": Config.SPOTIFY_CLIENT_ID,
         "response_type": "code",
@@ -26,6 +32,7 @@ def login():
         "show_dialog": "true",
     }
     return redirect(f"{SPOTIFY_AUTH_URL}?{urlencode(params)}")
+
 
 @auth.route("/callback")
 def callback():
@@ -106,11 +113,20 @@ def callback():
 
     db.session.commit()
 
+    # Store in session
     session["spotify_id"] = spotify_id
     session["access_token"] = access_token
     session["refresh_token"] = refresh_token
 
+    # ✅ Check for inviter_id in session (set during login)
+    inviter_id = session.pop("inviter_id", None)
+
+    if inviter_id:
+        return redirect(f"http://127.0.0.1:3000/compare?user1={inviter_id}&user2={spotify_id}")
+
+    # Default redirect to dashboard
     return redirect(f"{FRONTEND_REDIRECT_URI}?spotify_id={spotify_id}")
+
 
 @auth.route("/recently-played", methods=["GET"])
 def recently_played():
@@ -216,3 +232,24 @@ def logout():
     response = make_response(jsonify({"message": "User logged out successfully!"}))
     response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
+
+
+@auth.route("/full-top-artists", methods=["GET"])
+def full_top_artists():
+    spotify_id = request.args.get("spotify_id")
+    if not spotify_id:
+        return jsonify({"error": "Missing spotify_id"}), 400
+
+    user = User.query.filter_by(spotify_id=spotify_id).first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    access_token = refresh_access_token(user)
+    headers = {"Authorization": f"Bearer {access_token}"}
+    response = requests.get(f"{SPOTIFY_API_BASE_URL}me/top/artists?limit=10&time_range=short_term", headers=headers)
+
+    if response.status_code != 200:
+        return jsonify({"error": "Failed to fetch top artists from Spotify"}), response.status_code
+
+    return jsonify(response.json())
+
